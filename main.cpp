@@ -4,6 +4,89 @@
 #include <optional>
 #include <vector>
 #include <string>
+#include <fstream>
+
+class Mesh
+{
+public:
+    unsigned int VAO = 0, VBO = 0, EBO = 0;
+    GLsizei indexCount = 0;
+    bool indexed = false;
+
+    Mesh(const std::vector<float> &vertices,
+         const std::optional<std::vector<unsigned int>> &indices)
+    {
+        glGenVertexArrays(1, &VAO);
+        glGenBuffers(1, &VBO);
+
+        glBindVertexArray(VAO);
+
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBufferData(
+            GL_ARRAY_BUFFER,
+            vertices.size() * sizeof(float),
+            vertices.data(),
+            GL_STATIC_DRAW);
+
+        if (indices.has_value())
+        {
+            indexed = true;
+            indexCount = static_cast<GLsizei>(indices->size());
+
+            glGenBuffers(1, &EBO);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+
+            glBufferData(
+                GL_ELEMENT_ARRAY_BUFFER,
+                indices->size() * sizeof(unsigned int),
+                indices->data(),
+                GL_STATIC_DRAW);
+        }
+
+        glVertexAttribPointer(
+            0, 3, GL_FLOAT, GL_FALSE,
+            3 * sizeof(float), nullptr);
+
+        glEnableVertexAttribArray(0);
+
+        glBindVertexArray(0);
+    }
+
+    virtual void draw() = 0;
+
+    virtual ~Mesh() = default;
+};
+
+class Square : public Mesh
+{
+public:
+    Square(const std::vector<float> &vertices,
+           const std::vector<unsigned int> &indices)
+        : Mesh(vertices, indices) {}
+
+    void draw() override
+    {
+        glBindVertexArray(VAO);
+        glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, nullptr);
+        glBindVertexArray(0);
+    }
+};
+
+class Triangle : public Mesh
+{
+public:
+    Triangle(const std::vector<float> &vertices)
+        : Mesh(vertices, std::nullopt) {}
+
+    void draw() override
+    {
+        glBindVertexArray(VAO);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+        glBindVertexArray(0);
+    }
+};
+
+std::vector<std::unique_ptr<Mesh>> meshes;
 
 void framebuffer_size_callback(GLFWwindow *window, int width, int height)
 {
@@ -27,154 +110,96 @@ void clear()
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
-int get_vertex_shader()
+std::string load_shader_as_string(const std::string filename)
 {
-    const char *vertexShaderSource = "#version 330 core\n"
-                                     "layout (location = 0) in vec3 aPos;\n"
-                                     "void main()\n"
-                                     "{\n"
-                                     "   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
-                                     "}\0";
+    std::string result = std::string();
+    std::string line = std::string();
+    std::ifstream shader(filename.c_str());
 
-    unsigned int vertexShader;
-    vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    if (shader.is_open())
+    {
+        while (std::getline(shader, line))
+        {
+            result += line + '\n';
+        }
 
-    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
-    glCompileShader(vertexShader);
+        shader.close();
+    }
+
+    return result;
+}
+
+int get_shader(GLenum shaderType, std::string shaderFileSource)
+{
+    std::string shaderSource = load_shader_as_string(shaderFileSource);
+
+    unsigned int shader;
+    shader = glCreateShader(shaderType);
+
+    const char *source = shaderSource.c_str();
+
+    glShaderSource(shader, 1, &source, NULL);
+    glCompileShader(shader);
 
     int success;
     char infoLog[512];
-    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
 
     if (!success)
     {
-        glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
-        std::cout << "ERROR::SHADER::VERTEX::COMPILATION_FAILED\n"
+        glGetShaderInfoLog(shader, 512, NULL, infoLog);
+        std::cout << "ERROR::SHADER::COMPILATION_FAILED\n"
                   << infoLog << std::endl;
     }
 
-    return vertexShader;
+    return shader;
 }
 
-int get_fragment_shader(const char *fragmentShaderSource)
+int create_shader_program(int vertext_shader, int fragment_shader)
 {
-    unsigned int fragmentShader;
-    fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
-    glCompileShader(fragmentShader);
+    unsigned int shader_program;
+    shader_program = glCreateProgram();
 
-    return fragmentShader;
-}
-
-int get_shader_program(const char *fragmentShaderSource)
-{
-    int vertexShader = get_vertex_shader();
-    int fragmentShader = get_fragment_shader(fragmentShaderSource);
-
-    unsigned int shaderProgram;
-    shaderProgram = glCreateProgram();
-
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragmentShader);
-    glLinkProgram(shaderProgram);
+    glAttachShader(shader_program, vertext_shader);
+    glAttachShader(shader_program, fragment_shader);
+    glLinkProgram(shader_program);
 
     int success;
     char infoLog[512];
-    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
+    glGetProgramiv(shader_program, GL_LINK_STATUS, &success);
     if (!success)
     {
-        glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
+        glGetProgramInfoLog(shader_program, 512, NULL, infoLog);
         std::cout << "ERROR::SHADER::LINK_FAILED\n"
                   << infoLog << std::endl;
     }
 
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
+    glDeleteShader(vertext_shader);
+    glDeleteShader(fragment_shader);
 
-    return shaderProgram;
+    glUseProgram(shader_program);
+
+    return shader_program;
 }
 
-void render(std::vector<float> vertices, std::optional<std::vector<float>> indices, const char *fragmentShaderSource)
+int create_graphics_pipeline()
 {
-    int shaderProgram = get_shader_program(fragmentShaderSource);
+    int vertex_shader = get_shader(GL_VERTEX_SHADER, "../shaders/vert.glsl");
+    int fragment_shader = get_shader(GL_FRAGMENT_SHADER, "../shaders/frag.glsl");
+    int shader_program = create_shader_program(vertex_shader, fragment_shader);
 
-    unsigned int VBO;
-    glGenBuffers(1, &VBO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    int scale_location = glGetUniformLocation(shader_program, "u_scale");
+    glUniform1f(scale_location, 0.5f);
 
-    unsigned int VAO;
-    glGenVertexArrays(1, &VAO);
-    glBindVertexArray(VAO);
-
-    unsigned int EBO;
-    glGenBuffers(1, &EBO);
-    glBindVertexArray(VAO);
-
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
-
-    if (indices.has_value())
-    {
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.value().size() * sizeof(float), indices.value().data(), GL_STATIC_DRAW);
-    }
-
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void *)0);
-    glEnableVertexAttribArray(0);
-
-    glUseProgram(shaderProgram);
-    glBindVertexArray(VAO);
-
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-    glBindVertexArray(0);
+    return shader_program;
 }
 
 void draw()
 {
-
-    const char *orange = "#version 330 core\n"
-                         "out vec4 FragColor;\n"
-                         "void main()\n"
-                         " {\n"
-                         "   FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n"
-                         " }\n";
-
-    const char *yellow = "#version 330 core\n"
-                         "out vec4 FragColor;\n"
-                         "void main()\n"
-                         " {\n"
-                         "   FragColor = vec4(1.0f, 1.f, 1.f, 1.0f);\n"
-                         " }\n";
-
-    int shaderO = get_fragment_shader(orange);
-    int shaderY = get_fragment_shader(yellow);
-
-    // trianlge
-    std::vector<float> tri_1{
-        -0.5f, 0.5f, 0.f,
-        -1.f, -0.f, 0.f,
-        0.f, 0.f, 0.0f};
-
-    std::vector<float>
-        tri_2{0.5f, 0.5f, 0.f,
-              0.1f, -0.f, 0.f,
-              1.0f, 0.f, 0.0f};
-
-    // sqaure
-    // float vertices[] = {
-    //     0.5f, 0.5f, 0.0f,   // top right
-    //     0.5f, -0.5f, 0.0f,  // bottom right
-    //     -0.5f, -0.5f, 0.0f, // bottom left
-    //     -0.5f, 0.5f, 0.0f   // top left
-    // };
-    // unsigned int indices[] = {
-    //     0, 1, 3, // first triangle
-    //     1, 2, 3  // second triangle
-    // };
-
-    render(tri_1, std::nullopt, orange);
-    render(tri_2, std::nullopt, yellow);
+    for (const auto &mesh : meshes)
+    {
+        mesh->draw();
+    }
 }
 
 double timeElapsed = 0;
@@ -187,39 +212,62 @@ void tick()
     double deltaTime = time - timeElapsed;
     double fps = (1.0 / deltaTime);
 
-    std::cout << fps << std::endl;
-
+    // std::cout << fps << std::endl;
     timeElapsed = time;
 }
 
-int main()
+GLFWwindow *window;
+
+void init_program()
 {
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    // glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 
-    GLFWwindow *window = glfwCreateWindow(800, 600, "LearnOpenGL", NULL, NULL);
+    window = glfwCreateWindow(800, 600, "LearnOpenGL", NULL, NULL);
     if (window == NULL)
     {
         std::cout << "Failed to create GLFW window" << std::endl;
         glfwTerminate();
-        return -1;
+        return;
     }
     glfwMakeContextCurrent(window);
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
         std::cout << "Failed to initialize GLAD" << std::endl;
-        return -1;
+        return;
     }
 
     int width, height;
     glfwGetFramebufferSize(window, &width, &height);
     glViewport(0, 0, width, height);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+}
 
+void vertex_specification()
+{
+    std::vector<float> triangle{
+        -0.5f, 0.5f, 0.f,
+        -0.5f, -0.f, 0.f,
+        0.f, 0.f, 0.0f};
+
+    std::vector<float> vertices{
+        0.5f, 0.5f, 0.0f,
+        0.5f, -0.5f, 0.0f,
+        -0.5f, -0.5f, 0.0f,
+        -0.5f, 0.5f, 0.0f};
+
+    std::vector<unsigned int> indices{
+        0, 1, 3,
+        1, 2, 3};
+
+    meshes.push_back(std::make_unique<Square>(vertices, indices));
+}
+
+void main_loop()
+{
     while (!glfwWindowShouldClose(window))
     {
         processInput(window);
@@ -229,8 +277,20 @@ int main()
 
         tick();
     }
+}
 
+void clean_up()
+{
     glfwTerminate();
+}
+
+int main()
+{
+    init_program();
+    vertex_specification();
+    create_graphics_pipeline();
+    main_loop();
+    clean_up();
 
     return 0;
 }
