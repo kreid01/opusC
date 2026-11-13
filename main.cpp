@@ -6,85 +6,8 @@
 #include <string>
 #include <fstream>
 
-class Mesh
-{
-public:
-    unsigned int VAO = 0, VBO = 0, EBO = 0;
-    GLsizei indexCount = 0;
-    bool indexed = false;
-
-    Mesh(const std::vector<float> &vertices,
-         const std::optional<std::vector<unsigned int>> &indices)
-    {
-        glGenVertexArrays(1, &VAO);
-        glGenBuffers(1, &VBO);
-
-        glBindVertexArray(VAO);
-
-        glBindBuffer(GL_ARRAY_BUFFER, VBO);
-        glBufferData(
-            GL_ARRAY_BUFFER,
-            vertices.size() * sizeof(float),
-            vertices.data(),
-            GL_STATIC_DRAW);
-
-        if (indices.has_value())
-        {
-            indexed = true;
-            indexCount = static_cast<GLsizei>(indices->size());
-
-            glGenBuffers(1, &EBO);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-
-            glBufferData(
-                GL_ELEMENT_ARRAY_BUFFER,
-                indices->size() * sizeof(unsigned int),
-                indices->data(),
-                GL_STATIC_DRAW);
-        }
-
-        glVertexAttribPointer(
-            0, 3, GL_FLOAT, GL_FALSE,
-            3 * sizeof(float), nullptr);
-
-        glEnableVertexAttribArray(0);
-
-        glBindVertexArray(0);
-    }
-
-    virtual void draw() = 0;
-
-    virtual ~Mesh() = default;
-};
-
-class Square : public Mesh
-{
-public:
-    Square(const std::vector<float> &vertices,
-           const std::vector<unsigned int> &indices)
-        : Mesh(vertices, indices) {}
-
-    void draw() override
-    {
-        glBindVertexArray(VAO);
-        glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, nullptr);
-        glBindVertexArray(0);
-    }
-};
-
-class Triangle : public Mesh
-{
-public:
-    Triangle(const std::vector<float> &vertices)
-        : Mesh(vertices, std::nullopt) {}
-
-    void draw() override
-    {
-        glBindVertexArray(VAO);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
-        glBindVertexArray(0);
-    }
-};
+#include <meshes.h>
+#include <shader_utils.h>
 
 std::vector<std::unique_ptr<Mesh>> meshes;
 
@@ -108,25 +31,6 @@ void clear()
 {
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-}
-
-std::string load_shader_as_string(const std::string filename)
-{
-    std::string result = std::string();
-    std::string line = std::string();
-    std::ifstream shader(filename.c_str());
-
-    if (shader.is_open())
-    {
-        while (std::getline(shader, line))
-        {
-            result += line + '\n';
-        }
-
-        shader.close();
-    }
-
-    return result;
 }
 
 int get_shader(GLenum shaderType, std::string shaderFileSource)
@@ -178,18 +82,6 @@ int create_shader_program(int vertext_shader, int fragment_shader)
     glDeleteShader(fragment_shader);
 
     glUseProgram(shader_program);
-
-    return shader_program;
-}
-
-int create_graphics_pipeline()
-{
-    int vertex_shader = get_shader(GL_VERTEX_SHADER, "../shaders/vert.glsl");
-    int fragment_shader = get_shader(GL_FRAGMENT_SHADER, "../shaders/frag.glsl");
-    int shader_program = create_shader_program(vertex_shader, fragment_shader);
-
-    int scale_location = glGetUniformLocation(shader_program, "u_scale");
-    glUniform1f(scale_location, 0.5f);
 
     return shader_program;
 }
@@ -264,6 +156,18 @@ void vertex_specification()
         1, 2, 3};
 
     meshes.push_back(std::make_unique<Square>(vertices, indices));
+}
+
+int create_graphics_pipeline()
+{
+    int vertex_shader = get_shader(GL_VERTEX_SHADER, "../shaders/vert.glsl");
+    int fragment_shader = get_shader(GL_FRAGMENT_SHADER, "../shaders/frag.glsl");
+    int shader_program = create_shader_program(vertex_shader, fragment_shader);
+
+    int scale_location = glGetUniformLocation(shader_program, "u_scale");
+    glUniform1f(scale_location, 0.2f);
+
+    return shader_program;
 }
 
 void main_loop()
