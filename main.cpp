@@ -5,11 +5,27 @@
 #include <vector>
 #include <string>
 #include <fstream>
+#include <glm/glm.hpp>
 
 #include <meshes.h>
 #include <shader_utils.h>
 
 std::vector<std::unique_ptr<Mesh>> meshes;
+unsigned int shader_program = 0;
+float velocity = 0.00f;
+
+class GameObject
+{
+public:
+    glm::vec3 _position;
+    glm::vec3 _scale;
+
+    GameObject(glm::vec3 scale, glm::vec3 position)
+    {
+        _scale = scale;
+        _position = position;
+    }
+};
 
 void framebuffer_size_callback(GLFWwindow *window, int width, int height)
 {
@@ -20,6 +36,9 @@ void processInput(GLFWwindow *window)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
+
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        velocity += 0.01f;
 }
 
 void printLn(std::string s)
@@ -61,7 +80,6 @@ int get_shader(GLenum shaderType, std::string shaderFileSource)
 
 int create_shader_program(int vertext_shader, int fragment_shader)
 {
-    unsigned int shader_program;
     shader_program = glCreateProgram();
 
     glAttachShader(shader_program, vertext_shader);
@@ -88,9 +106,21 @@ int create_shader_program(int vertext_shader, int fragment_shader)
 
 void draw()
 {
-    for (const auto &mesh : meshes)
+    GameObject paddle = GameObject(glm::vec3(0.1f, 0.5f, 1.0f), glm::vec3(-0.8f, 0.0f + velocity, 1.0f));
+    GameObject paddle2 = GameObject(glm::vec3(0.1f, 0.5f, 1.0f), glm::vec3(0.8f, 0.0f, 1.0f));
+    std::vector<GameObject> objects = std::vector<GameObject>{paddle, paddle2};
+
+    clear();
+
+    for (const auto &object : objects)
     {
-        mesh->draw();
+        int scale_location = glGetUniformLocation(shader_program, "scale");
+        glUniform3f(scale_location, object._scale.r, object._scale.g, object._scale.b);
+
+        int position = glGetUniformLocation(shader_program, "position");
+        glUniform3f(position, object._position.r, object._position.g, object._position.b);
+
+        meshes[0]->draw();
     }
 }
 
@@ -102,9 +132,10 @@ void tick()
     double time = glfwGetTime();
 
     double deltaTime = time - timeElapsed;
-    double fps = (1.0 / deltaTime);
 
+    // double fps = (1.0 / deltaTime);
     // std::cout << fps << std::endl;
+
     timeElapsed = time;
 }
 
@@ -163,9 +194,6 @@ int create_graphics_pipeline()
     int vertex_shader = get_shader(GL_VERTEX_SHADER, "../shaders/vert.glsl");
     int fragment_shader = get_shader(GL_FRAGMENT_SHADER, "../shaders/frag.glsl");
     int shader_program = create_shader_program(vertex_shader, fragment_shader);
-
-    int scale_location = glGetUniformLocation(shader_program, "u_scale");
-    glUniform1f(scale_location, 0.2f);
 
     return shader_program;
 }
