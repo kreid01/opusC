@@ -12,18 +12,28 @@
 
 std::vector<std::unique_ptr<Mesh>> meshes;
 unsigned int shader_program = 0;
-float velocity = 0.00f;
+
+double timeElapsed = glfwGetTime();
+double deltaTime = 0;
+
+float paddle_pos = 0.0f;
+float velocity = 1.f;
+
+float ball_pos = 0.0f;
+float ball_velo = 1.f;
 
 class GameObject
 {
 public:
     glm::vec3 _position;
     glm::vec3 _scale;
+    bool _circle;
 
-    GameObject(glm::vec3 scale, glm::vec3 position)
+    GameObject(glm::vec3 scale, glm::vec3 position, bool circle)
     {
         _scale = scale;
         _position = position;
+        _circle = circle;
     }
 };
 
@@ -32,13 +42,41 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height)
     glViewport(0, 0, width, height);
 }
 
+bool in_bounds(bool up)
+{
+    float topBound = 1.0f - 0.25f;
+    float bottomBound = -1.0f + 0.25f;
+
+    if (up)
+    {
+        return paddle_pos <= topBound;
+    }
+    else
+    {
+        return paddle_pos >= bottomBound;
+    }
+}
+
 void processInput(GLFWwindow *window)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        velocity += 0.01f;
+    {
+        if (in_bounds(true))
+        {
+            paddle_pos += velocity * deltaTime;
+        }
+    }
+
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+    {
+        if (in_bounds(false))
+        {
+            paddle_pos -= velocity * deltaTime;
+        }
+    }
 }
 
 void printLn(std::string s)
@@ -106,9 +144,15 @@ int create_shader_program(int vertext_shader, int fragment_shader)
 
 void draw()
 {
-    GameObject paddle = GameObject(glm::vec3(0.1f, 0.5f, 1.0f), glm::vec3(-0.8f, 0.0f + velocity, 1.0f));
-    GameObject paddle2 = GameObject(glm::vec3(0.1f, 0.5f, 1.0f), glm::vec3(0.8f, 0.0f, 1.0f));
-    std::vector<GameObject> objects = std::vector<GameObject>{paddle, paddle2};
+    GameObject paddle = GameObject(glm::vec3(0.1f, 0.5f, 1.0f), glm::vec3(-0.8f, paddle_pos, 1.0f), false);
+    GameObject paddle2 = GameObject(glm::vec3(0.1f, 0.5f, 1.0f), glm::vec3(0.8f, 0.0f, 1.0f), false);
+
+    ball_pos += ball_velo * deltaTime;
+
+    GameObject centerLine = GameObject(glm::vec3(0.01f, 2.0f, 1.0f), glm::vec3(0.0f, 0.0f, 0.0f), false);
+    GameObject ball = GameObject(glm::vec3(0.075f, 0.1f, 1.0f), glm::vec3(ball_pos / 2, ball_pos / 2, 0.0f), true);
+
+    std::vector<GameObject> objects = std::vector<GameObject>{paddle, paddle2, ball, centerLine};
 
     clear();
 
@@ -120,23 +164,23 @@ void draw()
         int position = glGetUniformLocation(shader_program, "position");
         glUniform3f(position, object._position.r, object._position.g, object._position.b);
 
+        int circle_location = glGetUniformLocation(shader_program, "circle");
+        glUniform1i(circle_location, object._circle);
+
         meshes[0]->draw();
     }
 }
 
-double timeElapsed = 0;
-
 void tick()
 {
+    double currentTime = glfwGetTime();
+    deltaTime = currentTime - timeElapsed;
+    timeElapsed = currentTime;
+
+    if (deltaTime > 0.1)
+        deltaTime = 0.1;
+
     draw();
-    double time = glfwGetTime();
-
-    double deltaTime = time - timeElapsed;
-
-    // double fps = (1.0 / deltaTime);
-    // std::cout << fps << std::endl;
-
-    timeElapsed = time;
 }
 
 GLFWwindow *window;
