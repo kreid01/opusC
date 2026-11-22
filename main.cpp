@@ -10,51 +10,57 @@
 #include <meshes.h>
 #include <shader_utils.h>
 
-std::vector<std::unique_ptr<Mesh>> meshes;
-unsigned int shader_program = 0;
-
-double timeElapsed = glfwGetTime();
-double deltaTime = 0;
-
-float paddle_pos = 0.0f;
-float velocity = 1.f;
-
-float ball_pos = 0.0f;
-float ball_velo = 1.f;
-
 class GameObject
 {
 public:
+    glm::vec3 _og_position;
     glm::vec3 _position;
     glm::vec3 _scale;
+    glm::vec3 _velocity;
     bool _circle;
+    bool _collision;
+    bool _bounce;
 
-    GameObject(glm::vec3 scale, glm::vec3 position, bool circle)
+    glm::vec4 get_dimensions()
+    {
+        glm::vec3 half_scale = _scale * 0.5f;
+
+        return glm::vec4(
+            _position.x - half_scale.x,
+            _position.x + half_scale.x,
+            _position.y - half_scale.y,
+            _position.y + half_scale.y);
+    }
+
+    GameObject(glm::vec3 scale, glm::vec3 position, glm::vec3 velocity, bool circle, bool collision, bool bounce)
     {
         _scale = scale;
         _position = position;
+        _velocity = velocity;
+        _og_position = position;
         _circle = circle;
+        _collision = collision;
+        _bounce = bounce;
     }
 };
+
+std::vector<std::unique_ptr<Mesh>> meshes;
+std::vector<std::unique_ptr<GameObject>> objects;
+
+unsigned int shader_program = 0;
+
+double timeElapsed = glfwGetTime();
+float deltaTime = 0;
+
+bool p1_forward = false;
+bool p1_backwards = false;
+
+bool p2_forward = false;
+bool p2_backwards = false;
 
 void framebuffer_size_callback(GLFWwindow *window, int width, int height)
 {
     glViewport(0, 0, width, height);
-}
-
-bool in_bounds(bool up)
-{
-    float topBound = 1.0f - 0.25f;
-    float bottomBound = -1.0f + 0.25f;
-
-    if (up)
-    {
-        return paddle_pos <= topBound;
-    }
-    else
-    {
-        return paddle_pos >= bottomBound;
-    }
 }
 
 void processInput(GLFWwindow *window)
@@ -64,19 +70,33 @@ void processInput(GLFWwindow *window)
 
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
     {
-        if (in_bounds(true))
-        {
-            paddle_pos += velocity * deltaTime;
-        }
+        p1_forward = true;
+        return;
     }
 
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
     {
-        if (in_bounds(false))
-        {
-            paddle_pos -= velocity * deltaTime;
-        }
+        p1_backwards = true;
+        return;
     }
+
+    if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+    {
+        p2_forward = true;
+        return;
+    }
+
+    if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
+    {
+        p2_backwards = true;
+        return;
+    }
+
+    p1_backwards = false;
+    p1_forward = false;
+
+    p2_backwards = false;
+    p2_forward = false;
 }
 
 void printLn(std::string s)
@@ -142,62 +162,117 @@ int create_shader_program(int vertext_shader, int fragment_shader)
     return shader_program;
 }
 
-bool collision(glm::vec3 scale, glm::vec3 next_position)
+void check_collision(GameObject &ball, GameObject &paddle)
 {
-    if (next_position.y > 1.0f - scale.y)
+    glm::vec4 ballDimensions = ball.get_dimensions();
+    glm::vec4 paddleDimensions = paddle.get_dimensions();
+
+    if (ballDimensions.y < paddleDimensions.x ||
+        ballDimensions.x > paddleDimensions.y ||
+        ballDimensions.w < paddleDimensions.z ||
+        ballDimensions.z > paddleDimensions.w)
     {
-        ball_velo = ball_velo * -1;
-        return true;
+        return;
     }
 
-    if (next_position.x > 1.0f - scale.x)
+    if (ball._velocity.x > 0 && ball._position.x < paddle._position.x)
     {
-        ball_velo = ball_velo * -1;
-        return true;
+        ball._velocity.x *= -1;
+    }
+    else if (ball._velocity.x < 0 && ball._position.x > paddle._position.x)
+    {
+        ball._velocity.x *= -1;
+    }
+}
+
+int reset_count = 0;
+void reset()
+{
+    reset_count += 1;
+    std::cout << reset_count << std::endl;
+
+    for (const auto &object : objects)
+    {
+        object.get()->_position = object->_og_position;
+    }
+}
+
+void check_wall_collision(std::unique_ptr<GameObject> &obj)
+{
+    glm::vec4 dimensions = obj->get_dimensions();
+
+    if (dimensions.x <= -1.0f || dimensions.y >= 1.0f)
+    {
+        if (obj->_bounce)
+        {
+            reset();
+            return;
+        }
     }
 
-    if (next_position.y < -1.0f + scale.y)
+    if (dimensions.z + (obj->_velocity.y * deltaTime) <= -1.0f || dimensions.w + (obj->_velocity.y * deltaTime) >= 1.0f)
     {
-        ball_velo = ball_velo * -1;
-        return true;
+        if (obj->_bounce)
+        {
+            obj->_velocity.y *= -1.0f;
+        }
+        else
+        {
+            obj->_velocity.y = 0.0f;
+        }
     }
-
-    if (next_position.x < -1.0f + scale.x)
-    {
-        ball_velo = ball_velo * -1;
-        return true;
-    }
-
-    return false;
 }
 
 void draw()
 {
-    GameObject paddle = GameObject(glm::vec3(0.05f, 0.3f, 1.0f), glm::vec3(-0.8f, paddle_pos, 1.0f), false);
-    GameObject paddle2 = GameObject(glm::vec3(0.05f, 0.3f, 1.0f), glm::vec3(0.8f, 0.0f, 1.0f), false);
-
-    ball_pos += ball_velo * deltaTime;
-    glm::vec3 ball_pos_vec = glm::vec3(ball_pos / 2, ball_pos / 3, 0.0f);
-
-    collision(glm::vec3(0.03f, 0.04f, 1.0f), ball_pos_vec);
-
-    GameObject centerLine = GameObject(glm::vec3(0.01f, 2.0f, 1.0f), glm::vec3(0.0f, 0.0f, 0.0f), false);
-    GameObject ball = GameObject(glm::vec3(0.03f, 0.04f, 1.0f), ball_pos_vec, true);
-
-    std::vector<GameObject> objects = std::vector<GameObject>{paddle, paddle2, ball, centerLine};
-
     clear();
 
-    for (const auto &object : objects)
+    std::unique_ptr<GameObject> &ball = objects.at(0);
+    std::unique_ptr<GameObject> &paddle = objects.at(1);
+    std::unique_ptr<GameObject> &paddle2 = objects.at(2);
+
+    check_collision(*ball, *paddle2);
+    check_collision(*ball, *paddle);
+
+    if (p1_forward == true)
     {
+        paddle->_velocity.y = 1.0f;
+    }
+    else if (p1_backwards == true)
+    {
+        paddle->_velocity.y = -1.0f;
+    }
+    else
+    {
+        paddle->_velocity.y = 0;
+    }
+
+    if (p2_forward == true)
+    {
+        paddle2->_velocity.y = 1.0f;
+    }
+    else if (p2_backwards == true)
+    {
+        paddle2->_velocity.y = -1.0f;
+    }
+    else
+    {
+        paddle2->_velocity.y = 0;
+    }
+
+    for (auto &object : objects)
+    {
+        check_wall_collision(object);
+        object->_position += object->_velocity * deltaTime;
+
         int scale_location = glGetUniformLocation(shader_program, "scale");
-        glUniform3f(scale_location, object._scale.r, object._scale.g, object._scale.b);
+        glUniform3f(scale_location, object->_scale.r, object->_scale.g, object->_scale.b);
 
         int position = glGetUniformLocation(shader_program, "position");
-        glUniform3f(position, object._position.r, object._position.g, object._position.b);
+        glUniform3f(position, object->_position.r, object->_position.g, object->_position.b);
 
         int circle_location = glGetUniformLocation(shader_program, "circle");
-        glUniform1i(circle_location, object._circle);
+        glUniform1i(circle_location, object->_circle);
 
         meshes[0]->draw();
     }
@@ -274,8 +349,48 @@ int create_graphics_pipeline()
     return shader_program;
 }
 
+void add_game_obj(std::unique_ptr<GameObject> obj)
+{
+    objects.push_back(std::move(obj));
+}
+
 void main_loop()
 {
+    GameObject paddle = GameObject(
+        glm::vec3(0.05f, 0.3f, 1.0f),
+        glm::vec3(-0.8f, 0.0f, 1.0f),
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        false,
+        true,
+        false);
+    GameObject paddle2 = GameObject(
+        glm::vec3(0.05f, 0.3f, 1.0f),
+        glm::vec3(0.8f, 0.0f, 1.0f),
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        false,
+        true,
+        false);
+
+    GameObject centerLine = GameObject(
+        glm::vec3(0.01f, 2.0f, 1.0f),
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        false,
+        false,
+        false);
+    GameObject ball = GameObject(
+        glm::vec3(0.03f, 0.04f, 1.0f),
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(0.5f, 1.f, 0.0f),
+        true,
+        true,
+        true);
+
+    add_game_obj(std::make_unique<GameObject>(ball));
+    add_game_obj(std::make_unique<GameObject>(paddle));
+    add_game_obj(std::make_unique<GameObject>(paddle2));
+    add_game_obj(std::make_unique<GameObject>(centerLine));
+
     while (!glfwWindowShouldClose(window))
     {
         processInput(window);
