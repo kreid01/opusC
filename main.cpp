@@ -142,15 +142,47 @@ int create_shader_program(int vertext_shader, int fragment_shader)
     return shader_program;
 }
 
+bool collision(glm::vec3 scale, glm::vec3 next_position)
+{
+    if (next_position.y > 1.0f - scale.y)
+    {
+        ball_velo = ball_velo * -1;
+        return true;
+    }
+
+    if (next_position.x > 1.0f - scale.x)
+    {
+        ball_velo = ball_velo * -1;
+        return true;
+    }
+
+    if (next_position.y < -1.0f + scale.y)
+    {
+        ball_velo = ball_velo * -1;
+        return true;
+    }
+
+    if (next_position.x < -1.0f + scale.x)
+    {
+        ball_velo = ball_velo * -1;
+        return true;
+    }
+
+    return false;
+}
+
 void draw()
 {
-    GameObject paddle = GameObject(glm::vec3(0.1f, 0.5f, 1.0f), glm::vec3(-0.8f, paddle_pos, 1.0f), false);
-    GameObject paddle2 = GameObject(glm::vec3(0.1f, 0.5f, 1.0f), glm::vec3(0.8f, 0.0f, 1.0f), false);
+    GameObject paddle = GameObject(glm::vec3(0.05f, 0.3f, 1.0f), glm::vec3(-0.8f, paddle_pos, 1.0f), false);
+    GameObject paddle2 = GameObject(glm::vec3(0.05f, 0.3f, 1.0f), glm::vec3(0.8f, 0.0f, 1.0f), false);
 
     ball_pos += ball_velo * deltaTime;
+    glm::vec3 ball_pos_vec = glm::vec3(ball_pos / 2, ball_pos / 3, 0.0f);
+
+    collision(glm::vec3(0.03f, 0.04f, 1.0f), ball_pos_vec);
 
     GameObject centerLine = GameObject(glm::vec3(0.01f, 2.0f, 1.0f), glm::vec3(0.0f, 0.0f, 0.0f), false);
-    GameObject ball = GameObject(glm::vec3(0.075f, 0.1f, 1.0f), glm::vec3(ball_pos / 2, ball_pos / 2, 0.0f), true);
+    GameObject ball = GameObject(glm::vec3(0.03f, 0.04f, 1.0f), ball_pos_vec, true);
 
     std::vector<GameObject> objects = std::vector<GameObject>{paddle, paddle2, ball, centerLine};
 
