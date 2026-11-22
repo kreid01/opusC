@@ -185,11 +185,25 @@ void check_collision(GameObject &ball, GameObject &paddle)
     }
 }
 
-int reset_count = 0;
-void reset()
+int p1_score = 0;
+int p2_score = 0;
+
+void reset(bool player1)
 {
-    reset_count += 1;
-    std::cout << reset_count << std::endl;
+    if (player1)
+    {
+        p1_score += 1;
+    }
+    else
+    {
+        p2_score += 1;
+    }
+
+    std::string p1_message = "Player 1: " + std::to_string(p1_score);
+    std::string p2_message = "Player 2: " + std::to_string(p2_score);
+
+    printLn(p1_message);
+    printLn(p2_message);
 
     for (const auto &object : objects)
     {
@@ -205,7 +219,7 @@ void check_wall_collision(std::unique_ptr<GameObject> &obj)
     {
         if (obj->_bounce)
         {
-            reset();
+            reset(obj->_velocity.x > 0.0f);
             return;
         }
     }
