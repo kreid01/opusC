@@ -10,6 +10,12 @@
 #include <meshes.h>
 #include <shader_utils.h>
 
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
+
+#include "miniaudio.h"
+
 class GameObject
 {
 public:
@@ -51,6 +57,8 @@ unsigned int shader_program = 0;
 
 double timeElapsed = glfwGetTime();
 float deltaTime = 0;
+
+ma_engine engine;
 
 bool p1_forward = false;
 bool p1_backwards = false;
@@ -162,6 +170,11 @@ int create_shader_program(int vertext_shader, int fragment_shader)
     return shader_program;
 }
 
+void play_boom()
+{
+    ma_engine_play_sound(&engine, "assets/boom.mp3", NULL);
+}
+
 void check_collision(GameObject &ball, GameObject &paddle)
 {
     glm::vec4 ballDimensions = ball.get_dimensions();
@@ -178,37 +191,43 @@ void check_collision(GameObject &ball, GameObject &paddle)
     if (ball._velocity.x > 0 && ball._position.x < paddle._position.x)
     {
         ball._velocity.x *= -1;
+        play_boom();
     }
     else if (ball._velocity.x < 0 && ball._position.x > paddle._position.x)
     {
         ball._velocity.x *= -1;
+        play_boom();
     }
 }
 
 int p1_score = 0;
 int p2_score = 0;
 
-void reset(bool player1)
+void reset_game()
 {
-    if (player1)
-    {
-        p1_score += 1;
-    }
-    else
-    {
-        p2_score += 1;
-    }
-
-    std::string p1_message = "Player 1: " + std::to_string(p1_score);
-    std::string p2_message = "Player 2: " + std::to_string(p2_score);
-
-    printLn(p1_message);
-    printLn(p2_message);
+    p1_score = 0;
+    p2_score = 0;
 
     for (const auto &object : objects)
     {
         object.get()->_position = object->_og_position;
     }
+}
+
+void reset(bool player1)
+{
+    if (player1)
+    {
+        p1_score += 1;
+        play_boom();
+    }
+    else
+    {
+        p2_score += 1;
+        play_boom();
+    }
+
+    reset_game();
 }
 
 void check_wall_collision(std::unique_ptr<GameObject> &obj)
@@ -237,9 +256,58 @@ void check_wall_collision(std::unique_ptr<GameObject> &obj)
     }
 }
 
+void render_score(int player, int score, int posX)
+{
+    ImGui::SetNextWindowPos(ImVec2(posX, 30));
+    ImGui::SetNextWindowSize(ImVec2(200, 60));
+
+    ImGui::Begin(("Player " + std::to_string(player)).c_str(),
+                 nullptr,
+                 ImGuiWindowFlags_NoDecoration |
+                     ImGuiWindowFlags_NoBackground |
+                     ImGuiWindowFlags_NoInputs);
+
+    ImGui::SetWindowFontScale(2.0f);
+    ImGui::Text("Player %d: %d", player, score);
+    ImGui::End();
+}
+
+void draw_button(std::string name, std::function<void()> callback)
+{
+    ImGui::Begin("Button", nullptr, ImGuiWindowFlags_NoDecoration);
+    if (ImGui::Button(name.c_str()))
+    {
+        callback();
+    }
+
+    ImGui::End();
+}
+
+void draw_imgui()
+{
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    draw_button("Reset", reset_game);
+}
+
+bool started = false;
+void start()
+{
+    started = true;
+}
+
 void draw()
 {
     clear();
+    draw_imgui();
+
+    render_score(1, p1_score, 200);
+    render_score(2, p2_score, 420);
+
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
     std::unique_ptr<GameObject> &ball = objects.at(0);
     std::unique_ptr<GameObject> &paddle = objects.at(1);
@@ -306,6 +374,15 @@ void tick()
 
 GLFWwindow *window;
 
+void ui()
+{
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 330");
+}
+
 void init_program()
 {
     glfwInit();
@@ -332,6 +409,9 @@ void init_program()
     glfwGetFramebufferSize(window, &width, &height);
     glViewport(0, 0, width, height);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+
+    ui();
+    ma_engine_init(NULL, &engine);
 }
 
 void vertex_specification()
@@ -418,7 +498,11 @@ void main_loop()
 
 void clean_up()
 {
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
     glfwTerminate();
+    ma_engine_uninit(&engine);
 }
 
 int main()
