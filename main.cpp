@@ -203,15 +203,24 @@ void check_collision(GameObject &ball, GameObject &paddle)
 int p1_score = 0;
 int p2_score = 0;
 
-void reset_game()
+void reset_pos()
 {
-    p1_score = 0;
-    p2_score = 0;
-
     for (const auto &object : objects)
     {
         object.get()->_position = object->_og_position;
     }
+}
+
+void reset_score()
+{
+    p1_score = 0;
+    p2_score = 0;
+}
+
+void reset_game()
+{
+    reset_pos();
+    reset_score();
 }
 
 void reset(bool player1)
@@ -227,7 +236,7 @@ void reset(bool player1)
         play_boom();
     }
 
-    reset_game();
+    reset_pos();
 }
 
 void check_wall_collision(std::unique_ptr<GameObject> &obj)
