@@ -4,6 +4,8 @@
 #include <vector>
 #include <fstream>
 
+#pragma once
+
 class Mesh
 {
 public:
@@ -46,19 +48,13 @@ public:
             3 * sizeof(float), nullptr);
 
         glEnableVertexAttribArray(0);
-
         glBindVertexArray(0);
     }
 
-    virtual void draw() = 0;
-
-    virtual ~Mesh() = default;
-};
-
-class Square : public Mesh
-{
-public:
-    using Mesh::Mesh;
-    ~Square() override = default;
-    void draw() override;
+    void draw()
+    {
+        glBindVertexArray(VAO);
+        glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, nullptr);
+        glBindVertexArray(0);
+    }
 };
