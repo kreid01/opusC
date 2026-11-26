@@ -18,6 +18,7 @@
 #include "object.h"
 #include "shader.h"
 #include "pong.h"
+#include "breakout.h"
 
 unsigned int shader_program = 0;
 
@@ -100,7 +101,7 @@ enum Game
 
 Game game = Game::GPong;
 
-void tick(Pong &pong)
+void tick(Pong &pong, Breakout &breakout)
 {
     double currentTime = glfwGetTime();
     deltaTime = currentTime - timeElapsed;
@@ -120,7 +121,7 @@ void tick(Pong &pong)
         }
         else if (game == Game::GBreakout)
         {
-            // pong.play(deltaTime, p1_forward, p1_backwards, p2_forward, p2_backwards);
+            breakout.play(deltaTime);
         }
     }
     else
@@ -142,10 +143,10 @@ void tick(Pong &pong)
         ImGui::SameLine();
 
         ImGui::End();
-
-        ImGui::Render();
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     }
+
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
 GLFWwindow *window;
@@ -223,6 +224,7 @@ int create_graphics_pipeline()
 void main_loop()
 {
     Pong pong = Pong(_mesh.value());
+    Breakout breakout = Breakout(_mesh.value());
 
     while (!glfwWindowShouldClose(window))
     {
@@ -231,7 +233,7 @@ void main_loop()
         glfwSwapBuffers(window);
         glfwPollEvents();
 
-        tick(pong);
+        tick(pong, breakout);
     }
 }
 

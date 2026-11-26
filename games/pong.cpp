@@ -4,16 +4,13 @@
 #include <string>
 #include <fstream>
 #include <memory>
-#include <utility>
 
 #define GLFW_INCLUDE_NONE
-#include <glad/glad.h>
 
 #include <glm/glm.hpp>
 #include <meshes.h>
 
 #include <imgui.h>
-#include <imgui_impl_opengl3.h>
 
 #include "miniaudio.h"
 #include "object.h"
@@ -22,11 +19,6 @@
 extern ma_engine engine;
 extern int shader_program;
 extern float deltaTime;
-
-void play_boom()
-{
-    ma_engine_play_sound(&engine, "assets/boom.mp3", NULL);
-}
 
 void render_score(int player, int score, int posX)
 {
@@ -42,35 +34,6 @@ void render_score(int player, int score, int posX)
     ImGui::SetWindowFontScale(2.0f);
     ImGui::Text("Player %d: %d", player, score);
     ImGui::End();
-}
-
-void check_collision(GameObject &ball, GameObject &paddle)
-{
-    glm::vec4 ballDimensions = ball.get_dimensions();
-    glm::vec4 paddleDimensions = paddle.get_dimensions();
-
-    if (ballDimensions.y < paddleDimensions.x ||
-        ballDimensions.x > paddleDimensions.y ||
-        ballDimensions.w < paddleDimensions.z ||
-        ballDimensions.z > paddleDimensions.w)
-    {
-        return;
-    }
-
-    if (ball._velocity.x > 0 && ball._position.x < paddle._position.x)
-    {
-        ball._velocity.x *= -1;
-        play_boom();
-    }
-    else if (ball._velocity.x < 0 && ball._position.x > paddle._position.x)
-    {
-        ball._velocity.x *= -1;
-        play_boom();
-    }
-}
-
-void draw_button(std::string name, std::function<void()> callback)
-{
 }
 
 int p1_score = 0;
@@ -101,42 +64,13 @@ void Pong::reset(bool player1)
     if (player1)
     {
         p1_score += 1;
-        play_boom();
     }
     else
     {
         p2_score += 1;
-        play_boom();
     }
 
     reset_pos();
-}
-
-void Pong::check_wall_collision(std::unique_ptr<GameObject> &obj)
-{
-    glm::vec4 dimensions = obj->get_dimensions();
-
-    if (dimensions.x <= -1.0f || dimensions.y >= 1.0f)
-    {
-        if (obj->_bounce)
-        {
-            reset(obj->_velocity.x > 0.0f);
-            return;
-        }
-    }
-
-    if (dimensions.z + (obj->_velocity.y * deltaTime) <= -1.0f ||
-        dimensions.w + (obj->_velocity.y * deltaTime) >= 1.0f)
-    {
-        if (obj->_bounce)
-        {
-            obj->_velocity.y *= -1.0f;
-        }
-        else
-        {
-            obj->_velocity.y = 0.0f;
-        }
-    }
 }
 
 void Pong::play(float deltaTime, bool p1_forward, bool p1_backwards,
@@ -152,15 +86,8 @@ void Pong::play(float deltaTime, bool p1_forward, bool p1_backwards,
     render_score(1, p1_score, 200);
     render_score(2, p2_score, 420);
 
-    ImGui::Render();
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-    std::unique_ptr<GameObject> &ball = objects.at(0);
     std::unique_ptr<GameObject> &paddle = objects.at(1);
     std::unique_ptr<GameObject> &paddle2 = objects.at(2);
-
-    check_collision(*ball, *paddle2);
-    check_collision(*ball, *paddle);
 
     if (p1_forward)
         paddle->_velocity.y = 1.0f;
@@ -176,22 +103,5 @@ void Pong::play(float deltaTime, bool p1_forward, bool p1_backwards,
     else
         paddle2->_velocity.y = 0;
 
-    for (auto &object : objects)
-    {
-        check_wall_collision(object);
-        object->_position += object->_velocity * deltaTime;
-
-        int scale_location = glGetUniformLocation(shader_program, "scale");
-        glUniform3f(scale_location, object->_scale.r,
-                    object->_scale.g, object->_scale.b);
-
-        int position = glGetUniformLocation(shader_program, "position");
-        glUniform3f(position, object->_position.r,
-                    object->_position.g, object->_position.b);
-
-        int circle_location = glGetUniformLocation(shader_program, "circle");
-        glUniform1i(circle_location, object->_circle);
-
-        object->_mesh.draw();
-    }
+    draw_objects(&objects, deltaTime, shader_program);
 }

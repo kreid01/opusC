@@ -43,8 +43,6 @@ public:
         objects.push_back(std::make_unique<GameObject>(paddle));
         objects.push_back(std::make_unique<GameObject>(paddle2));
         objects.push_back(std::make_unique<GameObject>(centerLine));
-
-        std::cout << objects.size() << std::endl;
     }
 
     void play(float deltaTime, bool p1_forward, bool p1_backwards, bool p2_forward, bool p2_backwards);

@@ -30,6 +30,7 @@ add_executable(opusC
     main.cpp
     src/audio.cpp
     games/pong.cpp
+    games/breakout.cpp
 )
 
 # Header directories
