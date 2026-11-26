@@ -19,8 +19,6 @@
 #include "shader.h"
 #include "pong.h"
 
-std::vector<std::unique_ptr<GameObject>> objects;
-
 unsigned int shader_program = 0;
 
 double timeElapsed = glfwGetTime();
@@ -87,7 +85,22 @@ void start()
     started = true;
 }
 
-void tick()
+void draw_imgui()
+{
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+}
+
+enum Game
+{
+    GPong,
+    GBreakout
+};
+
+Game game = Game::GPong;
+
+void tick(Pong &pong)
 {
     double currentTime = glfwGetTime();
     deltaTime = currentTime - timeElapsed;
@@ -97,8 +110,42 @@ void tick()
         deltaTime = 0.1;
 
     clear();
-    Pong pong;
-    pong.play(deltaTime, p1_forward, p1_backwards, p2_forward, p2_backwards);
+    draw_imgui();
+
+    if (started)
+    {
+        if (game == Game::GPong)
+        {
+            pong.play(deltaTime, p1_forward, p1_backwards, p2_forward, p2_backwards);
+        }
+        else if (game == Game::GBreakout)
+        {
+            // pong.play(deltaTime, p1_forward, p1_backwards, p2_forward, p2_backwards);
+        }
+    }
+    else
+    {
+        ImGui::Begin("Options");
+        if (ImGui::Button("pong"))
+        {
+            game = Game::GPong;
+            start();
+        }
+
+        ImGui::SameLine();
+
+        if (ImGui::Button("breakout"))
+        {
+            game = Game::GBreakout;
+            start();
+        }
+        ImGui::SameLine();
+
+        ImGui::End();
+
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    }
 }
 
 GLFWwindow *window;
@@ -173,53 +220,9 @@ int create_graphics_pipeline()
     return shader_program;
 }
 
-void add_game_obj(std::unique_ptr<GameObject> obj)
-{
-    objects.push_back(std::move(obj));
-}
-
 void main_loop()
 {
-    Mesh mesh = _mesh.value();
-
-    GameObject paddle = GameObject(
-        glm::vec3(0.05f, 0.3f, 1.0f),
-        glm::vec3(-0.8f, 0.0f, 1.0f),
-        glm::vec3(0.0f, 0.0f, 0.0f),
-        false,
-        true,
-        false,
-        mesh);
-    GameObject paddle2 = GameObject(
-        glm::vec3(0.05f, 0.3f, 1.0f),
-        glm::vec3(0.8f, 0.0f, 1.0f),
-        glm::vec3(0.0f, 0.0f, 0.0f),
-        false,
-        true,
-        false,
-        mesh);
-
-    GameObject centerLine = GameObject(
-        glm::vec3(0.01f, 2.0f, 1.0f),
-        glm::vec3(0.0f, 0.0f, 0.0f),
-        glm::vec3(0.0f, 0.0f, 0.0f),
-        false,
-        false,
-        false,
-        mesh);
-    GameObject ball = GameObject(
-        glm::vec3(0.03f, 0.04f, 1.0f),
-        glm::vec3(0.0f, 0.0f, 0.0f),
-        glm::vec3(0.5f, 1.f, 0.0f),
-        true,
-        true,
-        true,
-        mesh);
-
-    objects.push_back(std::make_unique<GameObject>(ball));
-    objects.push_back(std::make_unique<GameObject>(paddle));
-    objects.push_back(std::make_unique<GameObject>(paddle2));
-    objects.push_back(std::make_unique<GameObject>(centerLine));
+    Pong pong = Pong(_mesh.value());
 
     while (!glfwWindowShouldClose(window))
     {
@@ -228,7 +231,7 @@ void main_loop()
         glfwSwapBuffers(window);
         glfwPollEvents();
 
-        tick();
+        tick(pong);
     }
 }
 

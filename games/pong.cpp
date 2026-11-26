@@ -8,13 +8,11 @@
 
 #define GLFW_INCLUDE_NONE
 #include <glad/glad.h>
-#include <GLFW/glfw3.h>
 
 #include <glm/glm.hpp>
 #include <meshes.h>
 
 #include <imgui.h>
-#include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 
 #include "miniaudio.h"
@@ -22,7 +20,6 @@
 #include "pong.h"
 
 extern ma_engine engine;
-extern std::vector<std::unique_ptr<GameObject>> objects;
 extern int shader_program;
 extern float deltaTime;
 
@@ -74,19 +71,12 @@ void check_collision(GameObject &ball, GameObject &paddle)
 
 void draw_button(std::string name, std::function<void()> callback)
 {
-    ImGui::Begin("Button", nullptr, ImGuiWindowFlags_NoDecoration);
-    if (ImGui::Button(name.c_str()))
-    {
-        callback();
-    }
-
-    ImGui::End();
 }
 
 int p1_score = 0;
 int p2_score = 0;
 
-void reset_pos()
+void Pong::reset_pos()
 {
     for (const auto &object : objects)
     {
@@ -94,19 +84,19 @@ void reset_pos()
     }
 }
 
-void reset_score()
+void Pong::reset_score()
 {
     p1_score = 0;
     p2_score = 0;
 }
 
-void reset_game()
+void Pong::reset_game()
 {
     reset_pos();
     reset_score();
 }
 
-void reset(bool player1)
+void Pong::reset(bool player1)
 {
     if (player1)
     {
@@ -122,16 +112,7 @@ void reset(bool player1)
     reset_pos();
 }
 
-void draw_imgui()
-{
-    ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
-
-    draw_button("Reset", reset_game);
-}
-
-void check_wall_collision(std::unique_ptr<GameObject> &obj)
+void Pong::check_wall_collision(std::unique_ptr<GameObject> &obj)
 {
     glm::vec4 dimensions = obj->get_dimensions();
 
@@ -161,7 +142,12 @@ void check_wall_collision(std::unique_ptr<GameObject> &obj)
 void Pong::play(float deltaTime, bool p1_forward, bool p1_backwards,
                 bool p2_forward, bool p2_backwards)
 {
-    draw_imgui();
+    ImGui::Begin("Options");
+    if (ImGui::Button("Reset"))
+    {
+        reset_game();
+    }
+    ImGui::End();
 
     render_score(1, p1_score, 200);
     render_score(2, p2_score, 420);
