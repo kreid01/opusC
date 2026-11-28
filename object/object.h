@@ -1,4 +1,5 @@
 #include <meshes.h>
+#include "miniaudio.h"
 
 class GameObject
 {
@@ -11,7 +12,9 @@ public:
     bool _collision;
     bool _bounce;
     Mesh _mesh;
+
     std::optional<glm::vec4> colour;
+    std::optional<int> health;
 
     glm::vec4 get_dimensions()
     {
@@ -44,29 +47,53 @@ public:
 //     ma_engine_play_sound(&engine, "assets/boom.mp3", NULL);
 // }
 
-static void check_collision(GameObject &ball, GameObject &paddle)
+static bool check_collision(GameObject &ball, GameObject &brick)
 {
     glm::vec4 ballDimensions = ball.get_dimensions();
-    glm::vec4 paddleDimensions = paddle.get_dimensions();
+    glm::vec4 brickDimensions = brick.get_dimensions();
 
-    if (ballDimensions.y < paddleDimensions.x ||
-        ballDimensions.x > paddleDimensions.y ||
-        ballDimensions.w < paddleDimensions.z ||
-        ballDimensions.z > paddleDimensions.w)
+    if (ball._bounce == false || brick.health == 0)
+        return false;
+
+    // Check AABB intersection
+    if (ballDimensions.y < brickDimensions.x ||
+        ballDimensions.x > brickDimensions.y ||
+        ballDimensions.w < brickDimensions.z ||
+        ballDimensions.z > brickDimensions.w)
     {
-        return;
+        return false;
     }
 
-    if (ball._velocity.x > 0 && ball._position.x < paddle._position.x && ball._bounce)
+    // Calculate penetration
+    float overlapX = std::min(ballDimensions.y, brickDimensions.y) -
+                     std::max(ballDimensions.x, brickDimensions.x);
+
+    float overlapY = std::min(ballDimensions.w, brickDimensions.w) -
+                     std::max(ballDimensions.z, brickDimensions.z);
+
+    if (brick.health.has_value())
     {
-        ball._velocity.y *= -1;
-        // play_boom();
+        brick.health.value() -= 1;
     }
-    else if (ball._velocity.x < 0 && ball._position.x > paddle._position.x && ball._bounce)
+
+    if (overlapX < overlapY)
     {
-        ball._velocity.y *= -1;
-        // play_boom();
+        ball._velocity.x *= -1.0f;
+
+        // Push ball out horizontally
+        float direction = ball._position.x < brick._position.x ? -1.0f : 1.0f;
+        ball._position.x += direction * overlapX;
     }
+    else
+    {
+        ball._velocity.y *= -1.0f;
+
+        // Push ball out vertically
+        float direction = ball._position.y < brick._position.y ? -1.0f : 1.0f;
+        ball._position.y += direction * overlapY;
+    }
+
+    return true;
 }
 
 static void check_wall_collision(std::unique_ptr<GameObject> &obj, float deltaTime)
@@ -102,9 +129,14 @@ static void draw_objects(std::vector<std::unique_ptr<GameObject>> *objects, floa
 {
     for (auto &object : *objects)
     {
+        if (object->health.has_value() && object->health.value() == 0)
+        {
+            continue;
+        }
+
         for (auto &object2 : *objects)
         {
-            if (object2->_collision)
+            if (object2->_collision && object != object2)
             {
                 check_collision(*object, *object2);
             }

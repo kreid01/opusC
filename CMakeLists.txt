@@ -37,6 +37,7 @@ add_executable(opusC
 target_include_directories(opusC PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/meshes
     ${CMAKE_CURRENT_SOURCE_DIR}/shader
+    ${CMAKE_CURRENT_SOURCE_DIR}/json
     ${CMAKE_CURRENT_SOURCE_DIR}/object
     ${CMAKE_CURRENT_SOURCE_DIR}/games
     ${CMAKE_CURRENT_SOURCE_DIR}/external/miniaudio
@@ -65,5 +66,9 @@ target_link_libraries(opusC PRIVATE
     glfw
     glm::glm
 )
+
+find_package(nlohmann_json REQUIRED)
+
+target_link_libraries(opusC PRIVATE nlohmann_json::nlohmann_json)
 
 target_compile_definitions(opusC PRIVATE GL_SILENCE_DEPRECATION)

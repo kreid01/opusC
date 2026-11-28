@@ -20,6 +20,7 @@
 #include "breakout.h"
 
 extern int shader_program;
+extern ma_engine engine;
 
 void Breakout::play(float deltaTime)
 {
